@@ -456,9 +456,7 @@
                 try {
                     const response = await fetch(`/classes/${classroomId}/files`, {
                         method: 'POST',
-                        body: formData,
-                        headers: {
-            'X-Requested-With': 'XMLHttpRequest' 
+                        body: formData
                     });
             const responseData = await response.json(); // Cela ne va plus échouer car le serveur enverra du JSON
 
