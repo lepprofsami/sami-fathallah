@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription - Math-learning</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Styles pour les messages d'information (si vous en avez d'autres) */
+        .info-message {
+            background-color: #e0f7fa; /* Bleu clair */
+            border: 1px solid #00bcd4; /* Bordure plus foncée */
+            color: #006064; /* Texte foncé */
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .info-message code {
+            background-color: #cce9ed;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/images/icons/icon-192x192.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Math-learning">
+
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <meta name="theme-color" content="#4CAF50"/>
+</head>
+<body>
+    <header>
+        <h1>Inscription</h1>
+        <nav>
+            <ul>
+                <li><a href="/">Accueil</a></li>
+                <li><a href="/auth/login">Se connecter</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div class="auth-container">
+            <h2>Créez votre compte</h2>
+            <% if (typeof error !== 'undefined' && error) { %>
+                <p class="error-message"><%= error %></p>
+            <% } %>
+            <% if (typeof message !== 'undefined' && message) { %>
+                <p class="success-message"><%= message %></p>
+            <% } %>
+
+            <form action="/auth/register" method="POST">
+                <label for="username">Nom d'utilisateur:</label>
+                <input type="text" id="username" name="username" required>
+
+
+                <label for="password">Mot de passe:</label>
+                <input type="password" id="password" name="password" required>
+
+                <label for="role">Je suis un(e) :</label>
+                <select id="role" name="role" required>
+                    <option value="">Sélectionnez un rôle</option>
+                    <option value="teacher">Professeur</option>
+                    <option value="student">Élève</option>
+                </select>
+
+                <label for="classroomCode" id="classroomCodeLabel" style="display: none;">Code de classe:</label>
+                <input type="text" id="classroomCode" name="classroomCode" style="display: none;">
+
+                <button type="submit">S'inscrire</button>
+            </form>
+            <p>Déjà un compte ? <a href="/login">Connectez-vous ici</a>.</p>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Math-learning</p>
+    </footer>
+
+    <script>
+    const roleSelect = document.getElementById('role');
+    const classroomCodeLabel = document.getElementById('classroomCodeLabel');
+    const classroomCodeInput = document.getElementById('classroomCode');
+
+    function handleRoleChange() {
+        if (roleSelect.value === 'student') {
+            // For students: show the classroom code field
+            classroomCodeLabel.style.display = 'block';
+            classroomCodeInput.style.display = 'block';
+            classroomCodeInput.setAttribute('required', 'required'); // Classroom code is required for students
+        } else {
+            // For teachers or no selection: hide the classroom code field
+            classroomCodeLabel.style.display = 'none';
+            classroomCodeInput.style.display = 'none';
+            classroomCodeInput.removeAttribute('required'); // Classroom code is not required
+            classroomCodeInput.value = ''; // Clear the value if hidden
+        }
+    }
+
+    // Run the function once on page load to set initial visibility
+    handleRoleChange();
+
+    // Attach the event listener to role select changes
+    roleSelect.addEventListener('change', handleRoleChange);
+    </script>
+</body>
+</html>

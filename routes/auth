@@ -1,0 +1,202 @@
+// routes/auth.js
+
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User'); // Assurez-vous que le chemin est correct (User.js)
+const bcrypt = require('bcryptjs');
+const Classroom = require('../models/Classroom'); // Assurez-vous que le chemin est correct (Classroom.js)
+
+// --- Route pour afficher le formulaire d'inscription (GET) ---
+router.get('/register', (req, res) => {
+    // Les messages d'erreur/succès sont gérés par le middleware dans server.js
+    // et disponibles via res.locals.error et res.locals.message
+    res.render('register', { title: 'Inscription' });
+});
+
+// --- Route d'inscription (POST) ---
+router.post('/register', async (req, res) => {
+    try {
+        const { username, password, role, classroomCode } = req.body;
+
+        console.log('--- Nouvelle Inscription ---');
+        console.log('Tentative d\'inscription pour:', username, 'Rôle:', role);
+
+        // Validation basique des champs
+        if (!username || !password || !role) {
+            req.session.error = 'Veuillez remplir tous les champs obligatoires (Nom d\'utilisateur, Mot de passe, Rôle).';
+            return res.redirect('/auth/register'); // Redirection pour afficher le message flash
+        }
+
+        let user = await User.findOne({ username });
+        if (user) {
+            console.log('Échec inscription: Nom d\'utilisateur déjà pris:', username);
+            req.session.error = 'Ce nom d\'utilisateur est déjà pris.';
+            return res.redirect('/auth/register'); // Redirection pour afficher le message flash
+        }
+
+        let classroom = null;
+        if (role === 'student') {
+            if (!classroomCode) {
+                console.log('Échec inscription (élève): Code de classe manquant.');
+                req.session.error = 'Le code de classe est requis pour les élèves.';
+                return res.redirect('/auth/register'); // Redirection pour afficher le message flash
+            }
+            // IMPORTANT : Vérifiez le nom du champ du code de la classe dans votre modèle Classroom.
+            // Si c'est 'code' au lieu de 'classCode', changez-le ici :
+            classroom = await Classroom.findOne({ classCode: classroomCode }); // Utilisez 'code' ou 'classCode' selon votre modèle
+            if (!classroom) {
+                console.log('Échec inscription (élève): Code de classe invalide:', classroomCode);
+                req.session.error = 'Code de classe invalide.';
+                return res.redirect('/auth/register'); // Redirection pour afficher le message flash
+            }
+            console.log('Classe trouvée pour l\'élève:', classroom.name, '(', classroom.code || classroom.classCode, ')');
+        }
+
+
+        user = new User({
+            username,
+            password: password,
+            role,
+            classroom: classroom ? classroom._id : null
+        });
+
+        await user.save();
+        console.log('Utilisateur enregistré en DB avec succès:', user.username, 'ID:', user._id);
+
+        if (classroom) {
+            classroom.students.push(user._id);
+            await classroom.save();
+            console.log('Élève', user.username, 'ajouté à la classe', classroom.name);
+        }
+
+        // Récupérer l'utilisateur avec la classe peuplée pour la session
+        const populatedUser = await User.findById(user._id).populate('classroom');
+
+        // Établir la session de l'utilisateur
+        req.session.user = {
+            _id: populatedUser._id,
+            username: populatedUser.username,
+            role: populatedUser.role,
+            // Si la classe existe, stockez l'ID et le nom dans la session
+            classroom: populatedUser.classroom ? {
+                _id: populatedUser.classroom._id,
+                name: populatedUser.classroom.name,
+                code: populatedUser.classroom.code // Ajoutez le code si vous en avez besoin côté client
+            } : null
+        };
+        console.log('Session utilisateur établie pour:', req.session.user.username);
+
+        // Définir un message de succès flash avant la redirection
+        req.session.success = 'Inscription réussie ! Vous êtes maintenant connecté.';
+
+        // Pas besoin de req.session.save() ici, car res.redirect déclenchera l'enregistrement de la session
+        if (populatedUser.role === 'teacher') {
+            res.redirect('/teacher/dashboard'); // Redirection vers le tableau de bord du professeur
+        } else {
+            res.redirect('/student/dashboard'); // Redirection vers le tableau de bord de l'élève
+        }
+
+    } catch (error) {
+        console.error("!!! ERREUR LORS DE L'INSCRIPTION !!!", error);
+        req.session.error = 'Erreur lors de l\'inscription. Veuillez réessayer. (Voir les logs serveur pour plus de détails)';
+        res.redirect('/auth/register'); // Redirection pour afficher le message flash
+    }
+});
+
+// --- Route pour afficher le formulaire de connexion (GET) ---
+router.get('/login', (req, res) => {
+    // Les messages d'erreur/succès sont gérés par le middleware dans server.js
+    // et disponibles via res.locals.error et res.locals.message
+    res.render('login', { title: 'Connexion' });
+});
+
+// --- Route de connexion (POST) ---
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        console.log('\n--- Tentative de Connexion ---');
+        console.log('Nom d\'utilisateur reçu:', username);
+
+        if (!username || !password) {
+            req.session.error = 'Veuillez entrer votre nom d\'utilisateur et votre mot de passe.';
+            return res.redirect('/auth/login'); // Redirection pour afficher le message flash
+        }
+
+        const user = await User.findOne({ username }).populate('classroom');
+
+        if (!user) {
+            console.log('Échec connexion: Nom d\'utilisateur ou mot de passe incorrect pour:', username);
+            req.session.error = 'Nom d\'utilisateur ou mot de passe incorrect.';
+            return res.redirect('/auth/login'); // Redirection pour afficher le message flash
+        }
+        console.log('Utilisateur trouvé en DB:', user.username, 'Rôle:', user.role);
+console.log('Mot de passe reçu (du formulaire):', password);
+        console.log('Mot de passe haché en DB (pour cet utilisateur):', user.password);
+        // --- IMPORTANT : Assurez-vous que cette méthode 'comparePassword' existe dans votre modèle User.js ---
+        // Elle devrait utiliser bcrypt.compare(passwordNonHashed, passwordHashedEnDB).
+        const isMatch = await user.comparePassword(password);
+
+        if (!isMatch) {
+            console.log('Échec connexion: Mot de passe incorrect pour l\'utilisateur:', username);
+            req.session.error = 'Nom d\'utilisateur ou mot de passe incorrect.';
+            return res.redirect('/auth/login'); // Redirection pour afficher le message flash
+        }
+
+        // Établir la session de l'utilisateur
+        req.session.user = {
+            _id: user._id,
+            username: user.username,
+            role: user.role,
+            classroom: user.classroom ? {
+                _id: user.classroom._id,
+                name: user.classroom.name,
+                code: user.classroom.code // Ajoutez le code si vous en avez besoin côté client
+            } : null
+        };
+        console.log('Connexion réussie! Session établie pour:', user.username);
+
+        req.session.success = 'Connexion réussie !'; // Définir un message de succès flash
+
+        // Redirection basée sur le rôle
+        if (user.role === 'teacher') {
+            res.redirect('/teacher/dashboard');
+        } else if (user.role === 'student') {
+            res.redirect('/student/dashboard');
+        } else {
+            console.warn('Rôle inconnu ou non géré pour l\'utilisateur:', user.username, 'Redirection vers l\'accueil.');
+            req.session.error = 'Rôle utilisateur inconnu.'; // Message flash pour rôle inconnu
+            res.redirect('/');
+        }
+
+    } catch (error) {
+        console.error("!!! ERREUR LORS DE LA CONNEXION !!!", error);
+        req.session.error = 'Une erreur interne est survenue lors de la connexion. (Voir les logs serveur pour plus de détails)';
+        res.redirect('/auth/login'); // Redirection pour afficher le message flash
+    }
+});
+
+// --- Route de déconnexion ---
+router.get('/logout', (req, res) => {
+    console.log('\n--- Tentative de Déconnexion ---');
+    if (req.session.user) {
+        console.log('Déconnexion de l\'utilisateur:', req.session.user.username);
+    } else {
+        console.log('Tentative de déconnexion sans utilisateur en session.');
+    }
+
+    req.session.destroy(err => {
+        if (err) {
+            console.error('!!! ERREUR LORS DE LA DÉCONNEXION !!!', err);
+            req.session.error = 'Erreur lors de la déconnexion.';
+            // Redirection vers /auth/login même en cas d'erreur de destroy, mais avec un message d'erreur
+            return res.redirect('/auth/login');
+        }
+        res.clearCookie('connect.sid');
+        console.log('Session détruite et cookie de session effacé.');
+        // Message de succès directement via la query string pour la page de connexion
+        res.redirect('/auth/login?message=' + encodeURIComponent('Vous avez été déconnecté avec succès.'));
+    });
+});
+
+module.exports = router;

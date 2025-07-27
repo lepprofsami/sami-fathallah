@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= classroom.name %> - Math-learning</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Styles pour le conteneur des contrôles de chat (boutons d'action) */
+        .chat-input-controls {
+            display: flex;
+            gap: 10px; /* Espace entre les boutons */
+            margin-bottom: 10px;
+        }
+
+        /* Styles pour le formulaire de chat (champ de texte + bouton envoyer) */
+        .chat-input-form {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap; /* Permet aux éléments de passer à la ligne sur petits écrans */
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        /* Le champ de saisie prendra le maximum d'espace disponible */
+        .chat-input-form input[type="text"] {
+            flex-grow: 1;
+            min-width: 150px; /* Taille minimale pour le champ de saisie */
+        }
+
+        /* Styles pour le conteneur d'aperçu de l'image */
+        .image-preview-container {
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            display: flex; /* Utilise flexbox pour aligner l'image, le nom et le bouton */
+            align-items: center; /* Centre verticalement les éléments */
+            gap: 10px; /* Espace entre les éléments de l'aperçu */
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+
+        /* Style de l'image d'aperçu */
+        .image-preview-container img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 3px;
+        }
+
+        /* Style du bouton pour retirer l'image */
+        .remove-image-button {
+            background-color: #ff6347; /* Couleur rouge */
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        /* Style des images dans le chat */
+        .message-item .chat-image {
+            max-width: 100%; /* S'assure que l'image ne déborde pas du conteneur de message */
+            height: auto; /* Maintient le ratio de l'image */
+            display: block; /* Pour centrer l'image si désiré, ou simplement la placer sur sa propre ligne */
+            margin: 5px auto; /* Marge au-dessus et en-dessous, et centrée */
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Petite ombre pour un meilleur rendu */
+        }
+
+        /* NOUVEAU: Style pour les liens de documents */
+        .message-item .chat-document {
+            display: inline-block; /* Permet le padding et margin */
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .message-item .chat-document:hover {
+            background-color: #dee2e6;
+            text-decoration: underline;
+        }
+
+        /* Styles pour l'iframe de prévisualisation PDF */
+        .message-item .file-link-preview iframe {
+            max-width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+    </style>
+
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/images/icons/icon-192x192.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Math-learning">
+
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <meta name="theme-color" content="#4CAF50"/>
+
+</head>
+<body>
+    <header>
+        <h1><%= classroom.name %> (Code: <%= classroom.classCode %>)</h1>
+        <nav>
+            <ul>
+                <li><a href="/">Accueil</a></li>
+                <% if (user && user.role === 'teacher') { %>
+                    <li><a href="/teacher/dashboard">Tableau de bord Professeur</a></li>
+                <% } else if (user) { %>
+                    <li><a href="/student/dashboard">Tableau de bord Élève</a></li>
+                <% } %>
+                <li><a href="/auth/logout">Déconnexion</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <h2>Détails de la classe : <%= classroom.name %></h2>
+        <p>Professeur :
+            <% if (classroom.teacher && classroom.teacher.username) { %>
+                <strong><%= classroom.teacher.username %></strong>
+            <% } else { %>
+                <strong>Non spécifié</strong>
+            <% } %>
+        </p>
+        <p>Nombre d'élèves inscrits : <strong><%= classroom.students ? classroom.students.length : 0 %></strong></p>
+        <hr>
+
+        <section class="chat-container">
+            <h3>Chat de la classe</h3>
+            <div id="messages" class="chat-box">
+                <p id="noMessagesYet" style="display: none;">Aucun message pour le moment. Soyez le premier à envoyer un message !</p>
+            </div>
+            <div class="chat-input-controls">
+                <input type="file" id="fileUploadInput" name="file" accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;">
+                <button type="button" id="uploadFileButton" class="button">Fichier (<i class="fas fa-paperclip" style="vertical-align: middle;"></i>)</button>
+            </div>
+            <div id="filePreview" class="image-preview-container" style="display: none;">
+                <span id="previewContent"></span> 
+                <span id="fileName"></span>
+                <button type="button" id="removeFileButton" class="remove-image-button">X</button>
+            </div>
+            <form id="chatForm" class="chat-input-form">
+                <input type="text" id="messageInput" placeholder="Écrivez votre message..." required>
+                <button type="submit" class="button">Envoyer</button>
+            </form>
+        </section>
+        <hr>
+
+        <section class="files-container">
+            <h3>Dépôt de Fichiers</h3>
+            <form action="/classes/<%= classroom._id %>/files" method="POST" enctype="multipart/form-data" class="file-upload-form">
+                <label for="fileUpload">Uploader un fichier :</label>
+                <input type="file" id="fileUpload" name="classFile" required>
+
+                <label for="fileCategory">Catégorie :</label>
+                <select id="fileCategory" name="category" required>
+                    <option value="">Sélectionner une catégorie</option>
+                    <option value="exercise">Exercice</option>
+                    <option value="homework">Devoir</option>
+                    <option value="correction">Correction</option>
+                </select>
+                <button type="submit" class="button">Uploader</button>
+            </form>
+
+            <h4>Fichiers Déposés par Catégorie</h4>
+            <%
+                const categorizedFiles = {
+                    'exercise': [],
+                    'homework': [],
+                    'correction': []
+                };
+
+                if (classroom.files && classroom.files.length > 0) {
+                    classroom.files.forEach(function(file) {
+                        if (categorizedFiles[file.category]) {
+                            categorizedFiles[file.category].push(file);
+                        }
+                    });
+                }
+            %>
+
+            <h5>Exercices</h5>
+            <% if (categorizedFiles.exercise.length > 0) { %>
+                <ul class="file-list">
+                    <% categorizedFiles.exercise.forEach(function(file) { %>
+                        <li>
+                            <%
+                                let displayFileName = file.fileName || 'Fichier sans nom';
+                                let fileUrl = '#'; 
+                                if (file.filePath && typeof file.filePath === 'string' && file.filePath.startsWith('http')) {
+                                    fileUrl = file.filePath;
+                                } else if (file.filePath && typeof file.filePath === 'string') {
+                                    const pathParts = file.filePath.split(/[\\/]/);
+                                    const fileNameInPath = pathParts[pathParts.length - 1];
+                                    if (fileNameInPath) {
+                                        fileUrl = "/uploads/" + fileNameInPath; 
+                                    }
+                                }
+                            %>
+                            <a href="<%= fileUrl %>" target="_blank" download>
+                                <%= displayFileName %>
+                            </a>
+                            (Taille: <%= file.fileSize ? (file.fileSize / 1024 / 1024).toFixed(2) + ' Mo' : 'N/A' %>) -
+                            Uploadé par
+                            <strong>
+                                <% if (file.uploader && file.uploader.username) { %>
+                                    <%= file.uploader.username %>
+                                <% } else { %>
+                                    Utilisateur Inconnu
+                                <% } %>
+                            </strong>
+                            le <%= file.uploadDate ? new Date(file.uploadDate).toLocaleDateString('fr-FR') : 'Date inconnue' %>
+                        </li>
+                    <% }); %>
+                </ul>
+            <% } else { %>
+                <p>Aucun exercice déposé pour le moment.</p>
+            <% } %>
+
+            <h5>Devoirs</h5>
+            <% if (categorizedFiles.homework.length > 0) { %>
+                <ul class="file-list">
+                    <% categorizedFiles.homework.forEach(function(file) { %>
+                        <li>
+                            <%
+                                let displayFileName = file.fileName || 'Fichier sans nom';
+                                let fileUrl = '#';
+                                if (file.filePath && typeof file.filePath === 'string' && file.filePath.startsWith('http')) {
+                                    fileUrl = file.filePath;
+                                } else if (file.filePath && typeof file.filePath === 'string') {
+                                    const pathParts = file.filePath.split(/[\\/]/);
+                                    const fileNameInPath = pathParts[pathParts.length - 1];
+                                    if (fileNameInPath) {
+                                        fileUrl = "/uploads/" + fileNameInPath;
+                                    }
+                                }
+                            %>
+                            <a href="<%= fileUrl %>" target="_blank" download>
+                                <%= displayFileName %>
+                            </a>
+                            (Taille: <%= file.fileSize ? (file.fileSize / 1024 / 1024).toFixed(2) + ' Mo' : 'N/A' %>) -
+                            Uploadé par
+                            <strong>
+                                <% if (file.uploader && file.uploader.username) { %>
+                                    <%= file.uploader.username %>
+                                <% } else { %>
+                                    Utilisateur Inconnu
+                                <% } %>
+                            </strong>
+                            le <%= file.uploadDate ? new Date(file.uploadDate).toLocaleDateString('fr-FR') : 'Date inconnue' %>
+                        </li>
+                    <% }); %>
+                </ul>
+            <% } else { %>
+                <p>Aucun devoir déposé pour le moment.</p>
+            <% } %>
+
+            <h5>Corrections</h5>
+            <% if (categorizedFiles.correction.length > 0) { %>
+                <ul class="file-list">
+                    <% categorizedFiles.correction.forEach(function(file) { %>
+                        <li>
+                            <%
+                                let displayFileName = file.fileName || 'Fichier sans nom';
+                                let fileUrl = '#';
+                                if (file.filePath && typeof file.filePath === 'string' && file.filePath.startsWith('http')) {
+                                    fileUrl = file.filePath;
+                                } else if (file.filePath && typeof file.filePath === 'string') {
+                                    const pathParts = file.filePath.split(/[\\/]/);
+                                    const fileNameInPath = pathParts[pathParts.length - 1];
+                                    if (fileNameInPath) {
+                                        fileUrl = "/uploads/" + fileNameInPath;
+                                    }
+                                }
+                            %>
+                            <a href="<%= fileUrl %>" target="_blank" download>
+                                <%= displayFileName %>
+                            </a>
+                            (Taille: <%= file.fileSize ? (file.fileSize / 1024 / 1024).toFixed(2) + ' Mo' : 'N/A' %>) -
+                            Uploadé par
+                            <strong>
+                                <% if (file.uploader && file.uploader.username) { %>
+                                    <%= file.uploader.username %>
+                                <% } else { %>
+                                    Utilisateur Inconnu
+                                <% } %>
+                            </strong>
+                            le <%= file.uploadDate ? new Date(file.uploadDate).toLocaleDateString('fr-FR') : 'Date inconnue' %>
+                        </li>
+                    <% }); %>
+                </ul>
+            <% } else { %>
+                <p>Aucune correction déposée pour le moment.</p>
+            <% } %>
+
+        </section>
+        <hr>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Math-learning</p>
+    </footer>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Initialisation de Socket.IO
+        const socket = io();
+
+        const classroomId = '<%= classroom._id %>';
+        const currentUsername = '<%= user.username %>'; // Utilisé pour l'affichage, pas pour l'envoi via socket (senderUsername vient du serveur)
+        const currentUserId = '<%= user._id %>'; // L'ID de l'utilisateur actuel
+
+        // Références aux éléments HTML du chat
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const chatForm = document.getElementById('chatForm');
+        const noMessagesYet = document.getElementById('noMessagesYet'); // Référence au paragraphe "Aucun message"
+
+        // Debugging for chatForm
+        console.log('Valeur de chatForm:', chatForm);
+        if (!chatForm) {
+            console.error("Erreur: L'élément avec l'ID 'chatForm' n'a pas été trouvé dans le DOM.");
+        }
+
+        // Éléments pour l'upload de fichiers
+        const uploadFileButton = document.getElementById('uploadFileButton');
+        const fileUploadInput = document.getElementById('fileUploadInput');
+        const filePreviewContainer = document.getElementById('filePreview');
+        const previewContent = document.getElementById('previewContent');
+        const fileNameSpan = document.getElementById('fileName');
+        const removeFileButton = document.getElementById('removeFileButton');
+
+        let selectedFile = null; 
+
+        console.log("Socket.IO client loaded.");
+        console.log("Classroom ID:", classroomId);
+        console.log("Current User:", currentUsername);
+
+        // Function to add a message to the chat UI
+        function addMessageToChat(msg) {
+            // Hide "No messages yet" if visible
+            if (noMessagesYet) {
+                noMessagesYet.style.display = 'none';
+            }
+
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message-item');
+
+            // Determine sender display name
+            const senderDisplayName = msg.senderUsername || 'Utilisateur Inconnu';
+            let messageContentHtml = '';
+
+            // Render message content based on type
+            if (msg.type === 'file' && msg.file) { 
+                const fileUrl = msg.file.filePath;
+                const fileName = msg.file.fileName;
+                const fileMimeType = msg.file.fileMimeType;
+
+                if (fileMimeType && fileMimeType.startsWith('image/')) {
+                    messageContentHtml = `<img src="${fileUrl}" alt="${fileName}" class="chat-image" onclick="window.open(this.src)">`;
+                } else if (fileMimeType && fileMimeType === 'application/pdf') {
+                    messageContentHtml = `
+                        <p class="file-link-preview">
+                            <i class="fas fa-file-pdf"></i>
+                            <a href="${fileUrl}" target="_blank" download="${fileName}">${fileName}</a>
+                        </p>
+                        <iframe src="${fileUrl}" width="100%" height="400px" style="border: none; margin-top: 5px;" allowfullscreen></iframe>
+                    `;
+                } else if (fileMimeType && (fileMimeType === 'application/msword' || fileMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+                    messageContentHtml = `
+                        <p class="file-link-preview">
+                            <i class="fas fa-file-word"></i>
+                            <a href="${fileUrl}" target="_blank" download="${fileName}">Télécharger ${fileName}</a>
+                        </p>
+                    `;
+                } else {
+                    messageContentHtml = `
+                        <p class="file-link-preview">
+                            <i class="fas fa-file"></i>
+                            <a href="${fileUrl}" target="_blank" download="${fileName}">Télécharger ${fileName}</a>
+                        </p>
+                    `;
+                }
+            } else {
+                // For text messages
+                messageContentHtml = msg.content || ''; 
+            }
+
+            messageElement.innerHTML = `
+                <strong>${senderDisplayName}:</strong> ${messageContentHtml}
+                <span class="timestamp">${msg.timestamp ? new Date(msg.timestamp).toLocaleString() : 'Date inconnue'}</span>
+            `;
+
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; 
+        }
+
+        // 1. Rejoindre la salle de chat spécifique à la classe
+        if (classroomId) {
+            socket.emit('joinRoom', classroomId);
+            console.log(`Client trying to join room: ${classroomId}`);
+        } else {
+            console.error("Classroom ID is not defined for Socket.IO joinRoom.");
+        }
+
+        // --- Logique d'upload de fichiers ---
+        uploadFileButton.addEventListener('click', () => {
+            fileUploadInput.click(); 
+        });
+
+        fileUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                fileNameSpan.textContent = file.name;
+                filePreviewContainer.style.display = 'flex';
+
+                if (file.type.startsWith('image/')) {
+                    previewContent.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Aperçu de l'image" style="max-width:100px; max-height:100px; border-radius:3px;">`;
+                } else if (file.type === 'application/pdf') {
+                    previewContent.innerHTML = `<i class="fas fa-file-pdf" style="font-size: 40px; color: #dc3545;"></i>`;
+                } else if (file.type === 'application/msword' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    previewContent.innerHTML = `<i class="fas fa-file-word" style="font-size: 40px; color: #007bff;"></i>`;
+                } else {
+                    previewContent.innerHTML = `<i class="fas fa-file" style="font-size: 40px; color: #6c757d;"></i>`;
+                }
+
+                messageInput.value = `[${file.type.startsWith('image/') ? 'Image' : 'Fichier'} à envoyer: ${file.name}]`;
+                messageInput.disabled = true;
+            } else {
+                resetChatInput();
+            }
+        });
+
+        removeFileButton.addEventListener('click', () => {
+            resetChatInput();
+        });
+
+        // 2. Gérer l'envoi d'un message via le formulaire
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); 
+
+            if (selectedFile) {
+                const formData = new FormData();
+                formData.append('classFile', selectedFile);
+                // The server route will handle associating the file with a chat message
+                // For simplicity, let's assume 'general' as category, but you might want to adjust this
+                formData.append('category', 'general'); 
+
+                try {
+                    const response = await fetch(`/classes/${classroomId}/files`, {
+                        method: 'POST',
+                        body: formData
+                    });
+            const responseData = await response.json(); // Cela ne va plus échouer car le serveur enverra du JSON
+
+                    if (response.ok) { 
+                        console.log('Fichier envoyé avec succès via HTTP POST. Le serveur va émettre le message Socket.IO.');
+                        // The server will emit the Socket.IO message after file is saved.
+                    } else {
+                        const errorData = await response.json(); 
+                        console.error('Erreur lors du téléchargement du fichier:', response.status, errorData.message || response.statusText);
+                        alert('Erreur lors du téléchargement du fichier : ' + (errorData.message || 'Erreur inconnue.'));
+                    }
+                } catch (error) {
+                    console.error('Erreur réseau ou serveur lors de l\'upload de fichier:', error);
+                    alert('Erreur réseau lors du téléchargement du fichier.');
+                }
+            } else {
+                const content = messageInput.value.trim();
+                if (!content) {
+                    alert('Veuillez écrire un message ou insérer un fichier.');
+                    return;
+                }
+
+                console.log('Client emitting chatMessage (text):', content);
+                socket.emit('chatMessage', {
+                    classroomId: classroomId,
+                    content: content,
+                    type: 'text'
+                });
+            }
+
+            resetChatInput(); 
+            // messagesDiv.scrollTop = messagesDiv.scrollHeight; // This is handled by addMessageToChat
+        });
+
+        function resetChatInput() {
+            messageInput.value = '';
+            messageInput.disabled = false;
+            selectedFile = null;
+            fileUploadInput.value = ''; 
+            filePreviewContainer.style.display = 'none'; 
+            previewContent.innerHTML = ''; 
+            fileNameSpan.textContent = ''; 
+        }
+
+        // 3. Gérer la réception d'un message du serveur
+        socket.on('message', (msg) => {
+            console.log('Client received message from server via socket:', msg);
+            addMessageToChat(msg); // Use the new function to display messages
+        });
+
+        // 4. Charger les messages existants au chargement de la page (Initialisation)
+        // This loop directly uses the addMessageToChat function to display historical messages.
+        // It's important to ensure the data structure matches what addMessageToChat expects.
+        // The `populate` in your server-side route for classroom details should ensure `message.sender`
+        // is an object with `username` and `_id`.
+       const historicalMessages = [];
+    <% if (classroom.messages && classroom.messages.length > 0) { %>
+        <% classroom.messages.forEach(function(message) { %>
+            historicalMessages.push({
+                senderId: "<%= message.sender ? message.sender._id : '' %>",
+                senderUsername: "<%= message.sender ? message.sender.username : 'Utilisateur Inconnu' %>",
+                content: `<%- JSON.stringify(message.content || '') %>`,
+                type: "<%= message.type %>",
+                timestamp: "<%= message.timestamp %>"
+                // No comma here if message.file might be null/undefined!
+                <% if (message.file) { %>
+                , // This comma is only rendered if message.file exists
+                file: {
+                    fileName: "<%= message.file.fileName || '' %>",
+                    filePath: "<%= message.file.filePath || '' %>",
+                    fileMimeType: "<%= message.file.fileMimeType || '' %>",
+                    fileSize: <%= message.file.fileSize != null ? message.file.fileSize : 0 %>,
+                    publicId: "<%= message.file.publicId || '' %>"
+                }
+                <% } %>
+            });
+        <% }); %>
+    <% } %>
+    // Now, `historicalMessages` array is correctly populated
+    // You can use it for your chat display logic, e.g.,
+    // historicalMessages.forEach(msg => addMessageToChat(msg));
+
+        // After all HTML elements are loaded and script parsed, display historical messages
+        document.addEventListener('DOMContentLoaded', () => {
+            if (historicalMessages.length === 0) {
+                if (noMessagesYet) {
+                    noMessagesYet.style.display = 'block'; // Show "No messages yet" if no messages
+                }
+            } else {
+                historicalMessages.forEach(msg => {
+                    // Parse content if it was stringified for EJS safety
+                    if (msg.type === 'text') {
+                        msg.content = JSON.parse(msg.content);
+                    }
+                    addMessageToChat(msg);
+                });
+            }
+            // Ensure scroll to bottom after all historical messages are loaded
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+    </script>
+</body>
+</html>

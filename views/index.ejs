@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+   <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/images/icons/icon-192x192.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Math-learning">
+
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <meta name="theme-color" content="#4CAF50"/>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Bienvenue sur Math-learning</h1>
+        <nav>
+            <ul>
+                <li><a href="/">Accueil</a></li>
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <% if (user.role === 'teacher') { %>
+                        <li><a href="/teacher/dashboard">Mon Tableau de bord</a></li>
+                    <% } else if (user.role === 'student') { %>
+                        <li><a href="/student/dashboard">Mon Tableau de bord</a></li>
+                    <% } %>
+                    <li><a href="/auth/logout">Déconnexion</a></li>
+                <% } else { %>
+                    <li><a href="/auth/login">Se connecter</a></li>
+                    <li><a href="/auth/register">S'inscrire</a></li>
+                <% } %>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-danger">
+            <%= error %>
+        </div>
+    <% } %>
+    <% if (typeof message !== 'undefined' && message) { %>
+        <div class="alert alert-success">
+            <%= message %>
+        </div>
+    <% } %>
+    <h2>Bienvenue sur Math-learning !</h2>
+    <p>Votre plateforme d'apprentissage des mathématiques interactive.</p>
+
+    
+
+    <p>Pour les élèves, inscrivez-vous ou connectez-vous pour rejoindre votre classe.</p>
+    <div class="call-to-action">
+        <a href="/auth/login" class="button">Se connecter</a>
+        <a href="/auth/register" class="button">S'inscrire</a>
+    </div>
+</main>
+    <footer>
+        <p>&copy; 2025 Math-learning</p>
+    </footer>
+
+<script>
+        // Ceci est le code client qui ENREGISTRE votre service-worker.js
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+                    // Enregistrement réussi
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    // Échec de l'enregistrement
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
